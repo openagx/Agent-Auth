@@ -1,0 +1,53 @@
+[project]
+name = "authzen"
+version = "0.1.0"
+description = "Open Agent Authorization SDK based on AuthZEN"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "OpenAGX", email = "contact@openagx.org"}
+]
+keywords = ["auth", "authorization", "authzen", "security", "access-control"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "jsonschema>=4.21.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/openagx/Agent-Auth"
+Repository = "https://github.com/openagx/Agent-Auth"
+Issues = "https://github.com/openagx/Agent-Auth/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["authzen"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
