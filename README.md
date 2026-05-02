@@ -12,6 +12,8 @@ AuthZEN defines a standard interface between Policy Enforcement Points and Polic
 
 ## Installation
 
+Install the SDK using pip:
+
 ```bash
 pip install authzen
 ```
@@ -116,21 +118,57 @@ PEPClient(pdp_url: str, timeout: float = 30.0, headers: dict = None)
 
 | Method | Description |
 |--------|-------------|
-| `check_access(subject, action, resource, context)` | Evaluate a single access request |
-| `check_access_batch(evaluations)` | Evaluate multiple requests in one call |
-| `is_allowed(subject, action, resource, context)` | Quick check returning bool |
-| `is_denied(subject, action, resource, context)` | Quick check returning bool |
+| [`check_access()`](#check_access) | Evaluate a single access request |
+| [`check_access_batch()`](#check_access_batch) | Evaluate multiple requests in one call |
+| [`is_allowed()`](#is_allowed) | Quick check returning bool |
+| [`is_denied()`](#is_denied) | Quick check returning bool |
+
+#### check_access
+
+```python
+decision = client.check_access(
+    subject: Subject,
+    action: Action,
+    resource: Resource,
+    context: Context | None = None,
+) -> Decision
+```
+
+Evaluates whether a subject can perform an action on a resource.
+
+#### check_access_batch
+
+```python
+results = client.check_access_batch(
+    evaluations: list[dict],
+) -> list[Decision]
+```
+
+Evaluates multiple access requests in a single call (also known as "boxcarring").
+
+#### is_allowed / is_denied
+
+```python
+allowed = client.is_allowed(
+    subject: Subject,
+    action: Action,
+    resource: Resource,
+    context: Context | None = None,
+) -> bool
+```
+
+Convenience methods that return a boolean directly.
 
 ### Models
 
 All models support `to_dict()` and `from_dict()` for serialization:
 
 ```python
- Subject(type="user", id="alice@example.com", properties={"department": "Sales"})
- Resource(type="document", id="123", properties={"title": "Report"})
- Action(name="can_read", properties={"method": "GET"})
- Context(properties={"time": "2024-01-01T12:00:00Z"})
- Decision(decision=True, context={"reason": "Allowed by policy"})
+Subject(type="user", id="alice@example.com", properties={"department": "Sales"})
+Resource(type="document", id="123", properties={"title": "Report"})
+Action(name="can_read", properties={"method": "GET"})
+Context(properties={"time": "2024-01-01T12:00:00Z"})
+Decision(decision=True, context={"reason": "Allowed by policy"})
 ```
 
 ## Resources
