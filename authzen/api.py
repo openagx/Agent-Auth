@@ -211,3 +211,89 @@ def run_server(
 
 if __name__ == "__main__":
     run_server()
+
+
+# Search API Models
+class SubjectSearchRequest(BaseModel):
+    """Subject search request."""
+    action: ActionModel
+    resource: ResourceModel
+    context: ContextModel | None = Field(default=None)
+
+
+class ResourceSearchRequest(BaseModel):
+    """Resource search request."""
+    subject: SubjectModel
+    action: ActionModel
+    context: ContextModel | None = Field(default=None)
+
+
+class ActionSearchRequest(BaseModel):
+    """Action search request."""
+    subject: SubjectModel
+    resource: ResourceModel
+    context: ContextModel | None = Field(default=None)
+
+
+class SearchResponse(BaseModel):
+    """Search results response."""
+    results: list[dict[str, Any]] = Field(default_factory=list)
+    total: int = 0
+
+
+# Search API endpoints
+@app.post("/search/v1/subjects", response_model=SearchResponse)
+def search_subjects(request: SubjectSearchRequest) -> SearchResponse:
+    """Search for subjects that can perform an action on a resource.
+    
+    This endpoint implements the AuthZEN Subject Search API.
+    """
+    try:
+        # This is a placeholder - implement actual search logic in PDP
+        return SearchResponse(results=[], total=0)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/search/v1/resources", response_model=SearchResponse)
+def search_resources(request: ResourceSearchRequest) -> SearchResponse:
+    """Search for resources that a subject can perform an action on.
+    
+    This endpoint implements the AuthZEN Resource Search API.
+    """
+    try:
+        # This is a placeholder - implement actual search logic in PDP
+        return SearchResponse(results=[], total=0)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/search/v1/actions", response_model=SearchResponse)
+def search_actions(request: ActionSearchRequest) -> SearchResponse:
+    """Search for actions that a subject can perform on a resource.
+    
+    This endpoint implements the AuthZEN Action Search API.
+    """
+    try:
+        # This is a placeholder - implement actual search logic in PDP
+        return SearchResponse(results=[], total=0)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# PDP Metadata
+class PDPVersionMetadata(BaseModel):
+    """PDP version metadata."""
+    version: str = "1.0"
+    spec_version: str = "1.0"
+    name: str = "AuthZEN PDP"
+    vendor: str = "openagx"
+
+
+@app.get("/pdp/v1/metadata", response_model=PDPVersionMetadata)
+def get_pdp_metadata() -> PDPVersionMetadata:
+    """Get PDP metadata.
+    
+    This endpoint implements the AuthZEN PDP Metadata API.
+    """
+    return PDPVersionMetadata()
