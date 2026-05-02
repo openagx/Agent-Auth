@@ -130,7 +130,7 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
     def health():
         return {"status": "healthy"}
     
-    @app.post("/access/v1/evaluations", response_model=DecisionResponse)
+    @app.post("/access/v1/evaluation", response_model=DecisionResponse)
     def evaluate_access(request: EvaluationRequest) -> DecisionResponse:
         """Evaluate a single access request."""
         try:
@@ -161,7 +161,7 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     
-    @app.post("/access/v1/evaluations/batch", response_model=BatchDecisionResponse)
+    @app.post("/access/v1/evaluations", response_model=BatchDecisionResponse)
     def evaluate_access_batch(request: BatchEvaluationRequest) -> BatchDecisionResponse:
         """Evaluate multiple access requests in a single call."""
         try:
@@ -218,7 +218,7 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     
-    @app.post("/search/v1/subjects", response_model=SearchResponse)
+    @app.post("/access/v1/search/subjects", response_model=SearchResponse)
     def search_subjects(request: SubjectSearchRequest, limits: RequestLimits = None) -> SearchResponse:
         """Search for subjects that can perform an action on a resource."""
         try:
@@ -245,7 +245,7 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     
-    @app.post("/search/v1/resources", response_model=SearchResponse)
+    @app.post("/access/v1/search/resources", response_model=SearchResponse)
     def search_resources(request: ResourceSearchRequest, limits: RequestLimits = None) -> SearchResponse:
         """Search for resources that a subject can perform an action on."""
         try:
@@ -272,7 +272,7 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     
-    @app.post("/search/v1/actions", response_model=SearchResponse)
+    @app.post("/access/v1/search/actions", response_model=SearchResponse)
     def search_actions(request: ActionSearchRequest, limits: RequestLimits = None) -> SearchResponse:
         """Search for actions that a subject can perform on a resource."""
         try:
@@ -304,6 +304,19 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
     def get_pdp_metadata() -> PDPVersionMetadata:
         """Get PDP metadata."""
         return PDPVersionMetadata()
+    
+    @app.get("/.well-known/authzen-configuration")
+    def well_known_config():
+        """Well-known configuration for PDP discovery."""
+        return {
+            "access_evaluation_endpoint": "/access/v1/evaluation",
+            "access_evaluations_endpoint": "/access/v1/evaluations",
+            "search_subject_endpoint": "/access/v1/search/subjects",
+            "search_resource_endpoint": "/access/v1/search/resources",
+            "search_action_endpoint": "/access/v1/search/actions",
+            "spec_version": "1.0",
+            "pdp_version": "1.0",
+        }
     
     return app
 
