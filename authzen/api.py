@@ -6,11 +6,11 @@ Policy Decision Point (PDP) server.
 
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from authzen.models import Action, Context, Decision, Resource, Subject
-from authzen.pdp import AlwaysAllowPDP, AlwaysDenyPDP, PDPInterface, SimplePDP
+from authzen.pdp import AlwaysAllowPDP, PDPInterface
 
 
 # Request/Response Models
@@ -67,15 +67,49 @@ class BatchDecisionResponse(BaseModel):
     results: list[DecisionResponse] = Field(default_factory=list, description="Array of decisions")
 
 
+class SubjectSearchRequest(BaseModel):
+    """Subject search request."""
+    action: ActionModel
+    resource: ResourceModel
+    context: ContextModel | None = Field(default=None)
+
+
+class ResourceSearchRequest(BaseModel):
+    """Resource search request."""
+    subject: SubjectModel
+    action: ActionModel
+    context: ContextModel | None = Field(default=None)
+
+
+class ActionSearchRequest(BaseModel):
+    """Action search request."""
+    subject: SubjectModel
+    resource: ResourceModel
+    context: ContextModel | None = Field(default=None)
+
+
+class SearchResponse(BaseModel):
+    """Search results response."""
+    results: list[dict[str, Any]] = Field(default_factory=list)
+    total: int = 0
+
+
+class PDPVersionMetadata(BaseModel):
+    """PDP version metadata."""
+    version: str = "1.0"
+    spec_version: str = "1.0"
+    name: str = "AuthZEN PDP"
+    vendor: str = "openagx"
+
+
+class RequestLimits(BaseModel):
+    """Pagination limits."""
+    limit: int = Field(default=100, ge=1, le=1000)
+    next_token: str | None = Field(default=None)
+
+
 def create_app(pdp: PDPInterface | None = None) -> FastAPI:
-    """Create a FastAPI application with AuthZEN endpoints.
-    
-    Args:
-        pdp: The PDP implementation to use. If None, uses AlwaysAllowPDP.
-        
-    Returns:
-        A FastAPI application configured with AuthZEN endpoints.
-    """
+    """Create a FastAPI application with AuthZEN endpoints."""
     if pdp is None:
         pdp = AlwaysAllowPDP()
     
@@ -85,22 +119,20 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
         version="1.0",
     )
     
+    # Store PDP reference in app state
+    app.state.pdp = pdp
+    
     @app.get("/")
     def root():
-        """Root endpoint."""
         return {"name": "AuthZEN PDP", "version": "1.0"}
     
     @app.get("/health")
     def health():
-        """Health check endpoint."""
         return {"status": "healthy"}
     
     @app.post("/access/v1/evaluations", response_model=DecisionResponse)
     def evaluate_access(request: EvaluationRequest) -> DecisionResponse:
-        """Evaluate a single access request.
-        
-        This endpoint implements the AuthZEN Access Evaluation API.
-        """
+        """Evaluate a single access request."""
         try:
             subject = Subject(
                 type=request.subject.type,
@@ -120,7 +152,7 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
             if request.context:
                 context = Context(properties=request.context.properties)
             
-            decision = pdp.evaluate(subject, action, resource, context)
+            decision = app.state.pdp.evaluate(subject, action, resource, context)
             
             return DecisionResponse(
                 decision=decision.decision,
@@ -131,10 +163,7 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
     
     @app.post("/access/v1/evaluations/batch", response_model=BatchDecisionResponse)
     def evaluate_access_batch(request: BatchEvaluationRequest) -> BatchDecisionResponse:
-        """Evaluate multiple access requests in a single call.
-        
-        This endpoint implements the AuthZEN Access Evaluations API (boxcarring).
-        """
+        """Evaluate multiple access requests in a single call."""
         try:
             evaluations = []
             
@@ -175,7 +204,7 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
                 if default_context and "context" not in eval_req:
                     eval_req["context"] = default_context
             
-            decisions = pdp.evaluate_batch(evaluations)
+            decisions = app.state.pdp.evaluate_batch(evaluations)
             
             results = [
                 DecisionResponse(
@@ -189,6 +218,93 @@ def create_app(pdp: PDPInterface | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     
+    @app.post("/search/v1/subjects", response_model=SearchResponse)
+    def search_subjects(request: SubjectSearchRequest, limits: RequestLimits = None) -> SearchResponse:
+        """Search for subjects that can perform an action on a resource."""
+        try:
+            action = Action(
+                name=request.action.name,
+                properties=request.action.properties,
+            )
+            resource = Resource(
+                type=request.resource.type,
+                id=request.resource.id,
+                properties=request.resource.properties,
+            )
+            context = None
+            if request.context:
+                context = Context(properties=request.context.properties)
+            
+            limit = limits.limit if limits else 100
+            subjects = app.state.pdp.search_subjects(action, resource, context, limit)
+            
+            return SearchResponse(
+                results=[s.to_dict() for s in subjects],
+                total=len(subjects),
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.post("/search/v1/resources", response_model=SearchResponse)
+    def search_resources(request: ResourceSearchRequest, limits: RequestLimits = None) -> SearchResponse:
+        """Search for resources that a subject can perform an action on."""
+        try:
+            subject = Subject(
+                type=request.subject.type,
+                id=request.subject.id,
+                properties=request.subject.properties,
+            )
+            action = Action(
+                name=request.action.name,
+                properties=request.action.properties,
+            )
+            context = None
+            if request.context:
+                context = Context(properties=request.context.properties)
+            
+            limit = limits.limit if limits else 100
+            resources = app.state.pdp.search_resources(subject, action, context, limit)
+            
+            return SearchResponse(
+                results=[r.to_dict() for r in resources],
+                total=len(resources),
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.post("/search/v1/actions", response_model=SearchResponse)
+    def search_actions(request: ActionSearchRequest, limits: RequestLimits = None) -> SearchResponse:
+        """Search for actions that a subject can perform on a resource."""
+        try:
+            subject = Subject(
+                type=request.subject.type,
+                id=request.subject.id,
+                properties=request.subject.properties,
+            )
+            resource = Resource(
+                type=request.resource.type,
+                id=request.resource.id,
+                properties=request.resource.properties,
+            )
+            context = None
+            if request.context:
+                context = Context(properties=request.context.properties)
+            
+            limit = limits.limit if limits else 100
+            actions = app.state.pdp.search_actions(subject, resource, context, limit)
+            
+            return SearchResponse(
+                results=[a.to_dict() for a in actions],
+                total=len(actions),
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/pdp/v1/metadata", response_model=PDPVersionMetadata)
+    def get_pdp_metadata() -> PDPVersionMetadata:
+        """Get PDP metadata."""
+        return PDPVersionMetadata()
+    
     return app
 
 
@@ -197,13 +313,7 @@ def run_server(
     port: int = 8080,
     pdp: PDPInterface | None = None,
 ) -> None:
-    """Run the AuthZEN PDP server.
-    
-    Args:
-        host: The host to bind to
-        port: The port to bind to
-        pdp: The PDP implementation to use
-    """
+    """Run the AuthZEN PDP server."""
     import uvicorn
     app = create_app(pdp)
     uvicorn.run(app, host=host, port=port)
@@ -211,89 +321,3 @@ def run_server(
 
 if __name__ == "__main__":
     run_server()
-
-
-# Search API Models
-class SubjectSearchRequest(BaseModel):
-    """Subject search request."""
-    action: ActionModel
-    resource: ResourceModel
-    context: ContextModel | None = Field(default=None)
-
-
-class ResourceSearchRequest(BaseModel):
-    """Resource search request."""
-    subject: SubjectModel
-    action: ActionModel
-    context: ContextModel | None = Field(default=None)
-
-
-class ActionSearchRequest(BaseModel):
-    """Action search request."""
-    subject: SubjectModel
-    resource: ResourceModel
-    context: ContextModel | None = Field(default=None)
-
-
-class SearchResponse(BaseModel):
-    """Search results response."""
-    results: list[dict[str, Any]] = Field(default_factory=list)
-    total: int = 0
-
-
-# Search API endpoints
-@app.post("/search/v1/subjects", response_model=SearchResponse)
-def search_subjects(request: SubjectSearchRequest) -> SearchResponse:
-    """Search for subjects that can perform an action on a resource.
-    
-    This endpoint implements the AuthZEN Subject Search API.
-    """
-    try:
-        # This is a placeholder - implement actual search logic in PDP
-        return SearchResponse(results=[], total=0)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/search/v1/resources", response_model=SearchResponse)
-def search_resources(request: ResourceSearchRequest) -> SearchResponse:
-    """Search for resources that a subject can perform an action on.
-    
-    This endpoint implements the AuthZEN Resource Search API.
-    """
-    try:
-        # This is a placeholder - implement actual search logic in PDP
-        return SearchResponse(results=[], total=0)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/search/v1/actions", response_model=SearchResponse)
-def search_actions(request: ActionSearchRequest) -> SearchResponse:
-    """Search for actions that a subject can perform on a resource.
-    
-    This endpoint implements the AuthZEN Action Search API.
-    """
-    try:
-        # This is a placeholder - implement actual search logic in PDP
-        return SearchResponse(results=[], total=0)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# PDP Metadata
-class PDPVersionMetadata(BaseModel):
-    """PDP version metadata."""
-    version: str = "1.0"
-    spec_version: str = "1.0"
-    name: str = "AuthZEN PDP"
-    vendor: str = "openagx"
-
-
-@app.get("/pdp/v1/metadata", response_model=PDPVersionMetadata)
-def get_pdp_metadata() -> PDPVersionMetadata:
-    """Get PDP metadata.
-    
-    This endpoint implements the AuthZEN PDP Metadata API.
-    """
-    return PDPVersionMetadata()
